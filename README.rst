@@ -3,13 +3,15 @@ marslander
 ==========
 
 
-Add a short description here!
+A basic implementation of Coding Game puzzle in Python using Genetic Algorithm
+
 
 
 Description
 ===========
 
-A longer description of your project goes here...
+A basic implementation of Coding Game puzzle in Python using Genetic Algorithm
+https://www.codingame.com/ide/puzzle/mars-lander-episode-1
 
 
 Note
