@@ -103,7 +103,7 @@ def calculate_trajectory(landing_height, initial_position, initial_speed, initia
             if position > HEIGHT_MAX:
                 fly_state = FlyState.CRASHED
             elif position < landing_height:
-                fly_state = FlyState.LANDED if speed > -40 else FlyState.CRASHED
+                fly_state = FlyState.LANDED if speed > -30 else FlyState.CRASHED
 
             states.append([time, position, speed, fuel, power, fly_state])
 
