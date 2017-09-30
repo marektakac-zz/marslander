@@ -16,8 +16,8 @@ POWER_MIN = 0
 POWER_MAX = 4
 POWER_SIZE = int(math.log2(POWER_MAX)) + 1
 POWER_LIMIT = 1
-TIME_MIN = 1
-TIME_MAX = 40
+TIME_MIN = 5
+TIME_MAX = 20
 TIME_SIZE = int(math.log2(TIME_MAX)) + 1
 GRAVITY = -3.711
 HEIGHT_MAX = 3000
@@ -27,7 +27,7 @@ COMMAND_SIZE = POWER_SIZE + TIME_SIZE
 COMMAND_COUNT = 10
 CHROMOSOME_SIZE = COMMAND_SIZE * COMMAND_COUNT
 POPULATION_SIZE = 20
-GENERATION_COUNT = 100
+GENERATION_COUNT = 20
 
 MUTATION_CHANCE = 0.01
 
@@ -82,6 +82,7 @@ def calculate_trajectory(landing_height, initial_position, initial_speed, initia
     speed = initial_speed
     fuel = initial_fuel
     power = initial_power
+    fly_state = FlyState.FLYING
 
     states = [[time, position, speed, fuel, power, FlyState.FLYING]]
     for command in decode_chromosome(chromosome):
@@ -94,7 +95,6 @@ def calculate_trajectory(landing_height, initial_position, initial_speed, initia
             position += speed
             fuel -= power
             time += 1
-            fly_state = FlyState.FLYING
 
             if position > HEIGHT_MAX:
                 fly_state = FlyState.CRASHED
@@ -139,16 +139,20 @@ def fitness(landing_height, position, speed, fuel, power, chromosome):
     result = None
     trajectory = calculate_trajectory(landing_height, position, speed, fuel, power, chromosome)
     last_state = trajectory[-1]
-    if last_state[4] == FlyState.LANDED:
+    if last_state[5] == FlyState.LANDED:
         result = last_state[3]
-    elif last_state[4] == FlyState.FLYING:
-        result = - last_state[1] + landing_height
+    elif last_state[5] == FlyState.FLYING:
+        # result = - last_state[1] + landing_height
+        result = 1-((last_state[1]-landing_height)/3000)
+    elif last_state[1] > HEIGHT_MAX:
+        result = 0
     else:
-        #result = landing_height - last_state[1] + last_state[2] + 40
         result = 200 / -last_state[2]
 
+    '''
     print('y:{} s:{} f:{} = {}'.format(int(last_state[1]), int(last_state[2]), int(last_state[3]), int(result)),
           file=sys.stderr)
+    '''
     return result
 
 
@@ -179,8 +183,16 @@ def get_best_trajectory(landing_height, position, speed, fuel, power):
         #print('Gen:{} Pop:{}'.format(generation_idx, population[0]), file=sys.stderr)
         weighted_population = []
 
+        fitness_array = []
         for chromosome in population:
-            weighted_population.append((chromosome, fitness(landing_height, position, speed, fuel, power, chromosome)))
+            fitness_value = fitness(landing_height, position, speed, fuel, power, chromosome)
+            fitness_array.append(fitness_value)
+            weighted_population.append((chromosome, fitness_value))
+
+        text = '{:02d}\t'.format(generation_idx + 1)
+        text += ' '.join([format(int(item), '>3d') for item in fitness_array])
+        text += ' = {}'.format(int(sum(fitness_array)))
+        print(text, file=sys.stderr)
 
         population = []
 
@@ -201,7 +213,14 @@ def get_best_trajectory(landing_height, position, speed, fuel, power):
             best_chromosome = chromosome
             best_fitness = fitness_value
 
-    return calculate_trajectory(landing_height, position, speed, fuel, power, best_chromosome)
+    found = calculate_trajectory(landing_height, position, speed, fuel, power, best_chromosome)
+
+    print('Best solution:', file=sys.stderr)
+    print('chromosome: ' + str(decode_chromosome(best_chromosome)), file=sys.stderr)
+    print('fitness: ' + str(best_fitness), file=sys.stderr)
+    print('last state: ' + str(found[-1]), file=sys.stderr)
+
+    return found
 
 
 if __name__ == "__main__":
