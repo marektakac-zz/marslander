@@ -7,6 +7,7 @@ import random
 from enum import Enum
 
 '''
+EXAMPLE OF ENCODING:
 power: 0-4 -> 0 1 2 3 4 	-> 5 values     -> 5 DEC = 101 BIN
 time: 1-40 -> 1 2 .. 39 40	-> 40 values    -> 40 DEC = 101000 BIN
 chromosome: 3 + 6 = 9 bits for one command
@@ -15,10 +16,12 @@ chromosome: 3 + 6 = 9 bits for one command
 POWER_MIN = 0
 POWER_MAX = 4
 POWER_SIZE = int(math.log2(POWER_MAX)) + 1
+POWER_BIN_FORMAT = '0{}b'.format(POWER_SIZE)
 POWER_LIMIT = 1
 TIME_MIN = 5
 TIME_MAX = 20
 TIME_SIZE = int(math.log2(TIME_MAX)) + 1
+TIME_BIN_FORMAT = '0{}b'.format(TIME_SIZE)
 GRAVITY = -3.711
 HEIGHT_MAX = 3000
 
@@ -27,9 +30,10 @@ COMMAND_SIZE = POWER_SIZE + TIME_SIZE
 COMMAND_COUNT = 10
 CHROMOSOME_SIZE = COMMAND_SIZE * COMMAND_COUNT
 POPULATION_SIZE = 20
-GENERATION_COUNT = 20
+GENERATION_COUNT = 30
 
 MUTATION_CHANCE = 0.01
+ELITISM = True
 
 
 class FlyState(Enum):
@@ -41,13 +45,13 @@ class FlyState(Enum):
 def encode_chromosome(commands):
     chromosome = ''
     for command in commands:
-        chromosome += format(command[0], '03b') + format(command[1], '06b')
+        chromosome += format(command[0], POWER_BIN_FORMAT) + format(command[1], TIME_BIN_FORMAT)
     return chromosome
 
 
 def replace_command(chromosome, command_idx, command):
     command_start = command_idx * COMMAND_SIZE
-    encoded_command = format(command[0], '03b') + format(command[1], '06b')
+    encoded_command = format(command[0], POWER_BIN_FORMAT) + format(command[1], TIME_BIN_FORMAT)
     command_end = command_start + COMMAND_SIZE
     return chromosome[:command_start] + encoded_command + chromosome[command_end:]
 
@@ -196,7 +200,13 @@ def get_best_trajectory(landing_height, position, speed, fuel, power):
 
         population = []
 
-        for _ in range(POPULATION_SIZE//2):
+        inherit_population_count = POPULATION_SIZE//2
+        if ELITISM:
+            inherit_population_count -= 1
+            elites = sorted(weighted_population, key=lambda item: item[1], reverse=True)[:2]
+            population = [item[0] for item in elites]
+
+        for _ in range(inherit_population_count):
             chromosome1 = weighted_choice(weighted_population)
             chromosome2 = weighted_choice(weighted_population)
 
