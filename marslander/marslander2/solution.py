@@ -4,8 +4,9 @@
 import sys
 import math
 import random
+import numpy as np
 from enum import Enum
-
+from copy import deepcopy
 
 POWER_MIN = 0
 POWER_MAX = 4
@@ -13,7 +14,7 @@ POWER_LIMIT = 1
 ROTATION_MIN = -90
 ROTATION_MAX = 90
 ROTATION_LIMIT = 15
-GRAVITY = -3.711
+GRAVITY = np.array([0, -3.711])
 WIDTH_MAX = 7000
 HEIGHT_MAX = 3000
 
@@ -28,6 +29,7 @@ class FlyState(Enum):
     LANDED = 0
     FLYING = 1
     CRASHED = 2
+    LOST = 3
 
 
 class State:
@@ -49,6 +51,15 @@ def trim(value, limit):
     else:
         return value
 
+
+def rotate_vector(vector, angle):
+    radians = math.radians(angle)
+    result = [None] * 2
+    result[0] = (vector[0] * math.cos(radians) - vector[1] * math.sin(radians)) * -1
+    result[1] = vector[0] * math.sin(radians) + vector[1] * math.cos(radians)
+    return np.array(result)
+
+
 def calculate_trajectory(x, y, h_speed, v_speed, fuel, rotate, power, landing_zone, chromosome):
     state = State()
     state.step = 1
@@ -61,24 +72,35 @@ def calculate_trajectory(x, y, h_speed, v_speed, fuel, rotate, power, landing_zo
 
     states = [state]
     for gene in chromosome:
-        gene_rotate = gene[0]
-        gene_power = gene[1]
+        new_state = deepcopy(state)
 
-        power += trim(gene_power - power, POWER_LIMIT)
-        speed += GRAVITY + power
-        position += speed
-        fuel -= power
-        time += 1
+        new_state.angle += trim(gene[0] - state.angle, ROTATION_LIMIT)
+        new_state.power += trim(gene[1] - state.power, POWER_LIMIT)
+        new_state.fuel -= new_state.power
+        thrust = rotate_vector(np.array([0., 1.]) * new_state.power, new_state.angle)
+        if new_state.fuel <= 0:
+            thrust = 0
+        new_state.velocity += GRAVITY + thrust
+        new_state.position += new_state.velocity
+        new_state.step += 1
+        new_state.fly_state = FlyState.FLYING
 
-        if position > HEIGHT_MAX:
-            fly_state = FlyState.CRASHED
-        elif position < landing_height:
-            fly_state = FlyState.LANDED if speed > -30 else FlyState.CRASHED
+        if new_state.position[0] < 0 or new_state.position[0] > WIDTH_MAX or new_state.position[1] > HEIGHT_MAX:
+            new_state.fly_state = FlyState.LOST
+        #elif new_state.position < landing_zone[1]:
+        elif (landing_zone[0][0] <= new_state.position[0] <= landing_zone[1][0] and
+             landing_zone[0][1] >= new_state.position[1]):
+            speed = np.linalg.norm(new_state.velocity)
+            new_state.fly_state = FlyState.LANDED if speed > 30 else FlyState.CRASHED
+        elif (new_state.position[1] < landing_zone[0][1]):
+            new_state.fly_state = FlyState.CRASHED
 
-        states.append([time, position, speed, fuel, power, fly_state])
+        states.append(new_state)
 
-        if fly_state != FlyState.FLYING:
+        if new_state.fly_state != FlyState.FLYING:
             break
+
+        state = new_state
 
     return states
 
@@ -86,6 +108,9 @@ def calculate_trajectory(x, y, h_speed, v_speed, fuel, rotate, power, landing_zo
 def fitness(x, y, h_speed, v_speed, fuel, rotate, power, landing_zone, chromosome):
     result = None
     trajectory = calculate_trajectory(x, y, h_speed, v_speed, fuel, rotate, power, landing_zone, chromosome)
+
+    print(trajectory, file=sys.stderr)
+
     last_state = trajectory[-1]
     if last_state[5] == FlyState.LANDED:
         result = last_state[3]
@@ -140,6 +165,7 @@ def get_best_trajectory(x, y, h_speed, v_speed, fuel, rotate, power, landing_zon
             elites = sorted(weighted_population, key=lambda item: item[1], reverse=True)[:2]
             population = [item[0] for item in elites]
 
+        '''
         for _ in range(inherit_population_count):
             chromosome1 = weighted_choice(weighted_population)
             chromosome2 = weighted_choice(weighted_population)
@@ -148,6 +174,7 @@ def get_best_trajectory(x, y, h_speed, v_speed, fuel, rotate, power, landing_zon
 
             population.append(mutate(chromosome1))
             population.append(mutate(chromosome2))
+        '''
 
     best_chromosome = population[0]
     best_fitness = fitness(x, y, h_speed, v_speed, fuel, rotate, power, landing_zone, chromosome)
@@ -157,6 +184,7 @@ def get_best_trajectory(x, y, h_speed, v_speed, fuel, rotate, power, landing_zon
             best_chromosome = chromosome
             best_fitness = fitness_value
 
+    '''
     found = calculate_trajectory(landing_height, position, speed, fuel, power, best_chromosome)
 
     print('Best solution:', file=sys.stderr)
@@ -165,6 +193,8 @@ def get_best_trajectory(x, y, h_speed, v_speed, fuel, rotate, power, landing_zon
     print('last state: ' + str(found[-1]), file=sys.stderr)
 
     return found
+    '''
+    return None
 
 
 def get_surface():
@@ -178,10 +208,11 @@ def get_surface():
 
 
 def calculate_landing_zone():
-    landing_zone = []
+    landing_zone = [None] * 2
     for point1, point2 in zip(surface, surface[1:]):
-        if point1[0] == point2[0]:
-            landing_zone.append(point1, point2)
+        if point1[1] == point2[1]:
+            landing_zone[0] = point1
+            landing_zone[1] = point2
     return landing_zone
 
 
